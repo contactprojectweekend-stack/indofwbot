@@ -2,75 +2,613 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen p-6">
-  <div id="loginBox" class="max-w-md mx-auto mt-20 bg-gray-800 p-6 rounded-lg border border-gray-700">
-    <h2 class="text-xl font-bold mb-4">Admin Authentication</h2>
-    <input id="email" type="email" placeholder="Email" value="contact.projectweekend@gmail.com" class="w-full mb-3 p-2 bg-gray-700 rounded border border-gray-600">
-    <input id="password" type="password" placeholder="Password" value="Indonesia" class="w-full mb-3 p-2 bg-gray-700 rounded border border-gray-600">
-    <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded font-semibold">Masuk</button>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-4 md:p-6 font-sans">
+  
+  <!-- MODAL EXPAND VIEW PERCAKAPAN (LAYAR PENUH) -->
+  <div id="roomExpandModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-800 border border-gray-700 rounded-2xl max-w-4xl w-full p-6 space-y-4 max-h-[92vh] flex flex-col shadow-2xl">
+      <div class="flex justify-between items-center border-b border-gray-700 pb-3">
+        <div>
+          <h3 id="expandModalTitle" class="text-lg font-bold text-blue-400">Detail Obrolan Pasangan</h3>
+          <p id="expandModalSubtitle" class="text-xs text-gray-400"></p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="modalClearBtn" onclick="" class="bg-red-950 hover:bg-red-800 border border-red-700 text-red-300 text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1 font-bold">
+            🗑️ Hapus & Bersihkan Room Ini
+          </button>
+          <button onclick="closeExpandModal()" class="text-gray-400 hover:text-white text-2xl font-bold px-2">&times;</button>
+        </div>
+      </div>
+
+      <!-- Filter Media dalam Modal -->
+      <div class="flex gap-2 text-xs">
+        <button onclick="setModalFilter('all')" id="modalFilter_all" class="px-3 py-1 rounded-lg bg-blue-600 text-white font-bold transition">🔘 Semua Pesan</button>
+        <button onclick="setModalFilter('media')" id="modalFilter_media" class="px-3 py-1 rounded-lg bg-gray-700 text-gray-300 hover:text-white transition">📷 Foto & Video Saja</button>
+        <button onclick="setModalFilter('text')" id="modalFilter_text" class="px-3 py-1 rounded-lg bg-gray-700 text-gray-300 hover:text-white transition">💬 Teks Saja</button>
+      </div>
+
+      <div id="expandModalChatBody" class="flex-1 overflow-y-auto space-y-3 p-4 bg-gray-950/60 rounded-xl border border-gray-700"></div>
+    </div>
   </div>
 
-  <div id="dashboard" class="hidden max-w-6xl mx-auto space-y-6">
-    <header class="flex justify-between items-center bg-gray-800 p-4 rounded-lg border border-gray-700">
-      <h1 class="text-2xl font-bold">Admin Control Center</h1>
-      <button onclick="logout()" class="bg-red-600 px-4 py-2 rounded">Logout</button>
+  <!-- MODAL GALERI FOTO PENGGUNA -->
+  <div id="photoModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-800 border border-gray-700 rounded-2xl max-w-2xl w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
+      <div class="flex justify-between items-center border-b border-gray-700 pb-3">
+        <h3 id="modalTitle" class="text-lg font-bold text-blue-400">Galeri Foto Pengguna</h3>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-white text-2xl font-bold px-2">&times;</button>
+      </div>
+      <div id="modalPhotoGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+    </div>
+  </div>
+
+  <!-- FORM LOGIN ADMIN -->
+  <div id="loginBox" class="max-w-md mx-auto mt-20 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-2xl">
+    <h2 class="text-2xl font-bold mb-2 text-center text-blue-400">Admin Control Center</h2>
+    <p class="text-gray-400 text-sm mb-6 text-center">Silakan masuk menggunakan kredensial admin.</p>
+    <div class="space-y-4">
+      <div>
+        <label class="text-xs text-gray-400">Email Admin</label>
+        <input id="email" type="email" value="contact.projectweekend@gmail.com" class="w-full p-2.5 bg-gray-700 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 text-white">
+      </div>
+      <div>
+        <label class="text-xs text-gray-400">Password</label>
+        <input id="password" type="password" value="Indonesia" class="w-full p-2.5 bg-gray-700 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 text-white">
+      </div>
+      <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg font-semibold transition">Masuk ke Dashboard</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD UTAMA -->
+  <div id="dashboard" class="hidden max-w-7xl mx-auto space-y-6">
+    <header class="flex flex-wrap justify-between items-center bg-gray-800 p-4 rounded-xl border border-gray-700">
+      <div>
+        <h1 class="text-xl font-bold text-blue-400">Casual Match Admin Panel</h1>
+        <p class="text-xs text-gray-400">Kelola Akun VIP, Pengguna & Obrolan Pasangan Match</p>
+      </div>
+      <div class="flex gap-2 mt-2 sm:mt-0">
+        <button onclick="showDash()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-sm">🔄 Refresh</button>
+        <button onclick="logout()" class="bg-red-600 hover:bg-red-500 px-3 py-1.5 rounded-lg text-sm font-semibold">Keluar</button>
+      </div>
     </header>
 
-    <section class="bg-gray-800 p-4 rounded-lg border border-gray-700">
-      <h3 class="text-lg font-bold mb-3">Daftar Pengguna</h3>
-      <div id="userTable" class="overflow-x-auto text-sm"></div>
+    <!-- FORM INPUT MANUAL USER -->
+    <section class="bg-gray-800 p-6 rounded-xl border border-gray-700">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          👤 Tambah User Baru (Input Manual)
+        </h3>
+        <button onclick="cleanDummies()" class="bg-gray-700 hover:bg-red-800 text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs transition">
+          🗑️ Bersihkan Dummy
+        </button>
+      </div>
+
+      <form id="dummyForm" onsubmit="submitDummyUser(event)" class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Nama Tampilan *</label>
+            <input id="d_name" type="text" placeholder="Contoh: Jessica" required class="w-full p-2.5 bg-gray-700 rounded-lg border border-gray-600 text-white text-sm focus:border-blue-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Username Telegram</label>
+            <input id="d_username" type="text" placeholder="Contoh: jessicatan" class="w-full p-2.5 bg-gray-700 rounded-lg border border-gray-600 text-white text-sm focus:border-blue-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Usia (Min 18) *</label>
+            <input id="d_age" type="number" min="18" placeholder="Contoh: 24" required class="w-full p-2.5 bg-gray-700 rounded-lg border border-gray-600 text-white text-sm focus:border-blue-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Gender *</label>
+            <select id="d_gender" class="w-full p-2.5 bg-gray-700 rounded-lg border border-gray-600 text-white text-sm focus:border-blue-500 focus:outline-none">
+              <option value="wanita">Wanita</option>
+              <option value="pria">Pria</option>
+              <option value="non-biner">Non-biner</option>
+              <option value="lainnya">Lainnya</option>
+              <option value="tidak_disebutkan">Tidak ingin menyebutkan</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-700">
+            <label class="block text-xs font-semibold text-gray-300 mb-2">Gender yang Dicari *</label>
+            <div class="flex flex-wrap gap-3 text-sm">
+              <label class="flex items-center gap-1.5"><input type="checkbox" name="pref_gender" value="pria" checked class="rounded"> Pria</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" name="pref_gender" value="wanita" class="rounded"> Wanita</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" name="pref_gender" value="non-biner" class="rounded"> Non-biner</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" name="pref_gender" value="Semua" class="rounded"> Semua</label>
+            </div>
+          </div>
+
+          <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-700">
+            <label class="block text-xs font-semibold text-gray-300 mb-2">Tujuan Hubungan *</label>
+            <div class="flex flex-wrap gap-3 text-sm">
+              <label class="flex items-center gap-1.5"><input type="checkbox" name="goals" value="FWB" checked class="rounded"> FWB</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" name="goals" value="ONS" checked class="rounded"> ONS</label>
+              <label class="flex items-center gap-1.5"><input type="checkbox" name="goals" value="Virtual" class="rounded"> Virtual</label>
+            </div>
+          </div>
+
+          <div class="bg-gray-900/50 p-3 rounded-lg border border-gray-700 flex flex-col justify-center">
+            <label class="block text-xs font-semibold text-gray-300 mb-2">Status Akun VIP</label>
+            <label class="flex items-center gap-2 text-sm text-yellow-400 font-bold cursor-pointer">
+              <input type="checkbox" id="d_is_vip" class="rounded w-4 h-4 text-yellow-500">
+              ⭐ Berikan Status VIP Langsung
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">URL Foto Profil (3 - 5 baris, 1 URL per baris) *</label>
+          <textarea id="d_photos" rows="3" required placeholder="https://images.unsplash.com/photo-1494790108377-be9c29b29330&#10;https://images.unsplash.com/photo-1524504388940-b1c1722653e1&#10;https://images.unsplash.com/photo-1517841905240-472988babdf9" class="w-full p-2.5 bg-gray-700 rounded-lg border border-gray-600 text-white text-xs font-mono focus:border-blue-500 focus:outline-none"></textarea>
+        </div>
+
+        <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-lg text-sm font-bold shadow-lg transition">
+          💾 Simpan User Baru
+        </button>
+      </form>
     </section>
 
-    <section class="bg-gray-800 p-4 rounded-lg border border-gray-700">
-      <h3 class="text-lg font-bold mb-3">Monitoring Percakapan</h3>
-      <div id="msgTable" class="overflow-x-auto text-sm"></div>
+    <!-- TABEL USERS DENGAN TOMBOL VIP -->
+    <section class="bg-gray-800 p-5 rounded-xl border border-gray-700">
+      <h3 class="text-lg font-bold mb-4 text-gray-200">👥 Daftar Pengguna & Hak Akses VIP</h3>
+      <div id="userTable" class="overflow-x-auto text-sm">
+        <p class="text-gray-400">Memuat data pengguna...</p>
+      </div>
+    </section>
+
+    <!-- MONITORING PERCAKAPAN DIKELOMPOKKAN PER PASANGAN -->
+    <section class="bg-gray-800 p-5 rounded-xl border border-gray-700 space-y-4">
+      <div class="flex flex-wrap justify-between items-center gap-3">
+        <div>
+          <h3 class="text-lg font-bold text-gray-200">💬 Monitoring Percakapan per Pasangan Match</h3>
+          <p class="text-xs text-gray-400">Pesan dikelompokkan per room match. Gunakan filter media atau tombol Expand View.</p>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Filter Jenis Pesan -->
+          <div class="flex gap-1 text-xs bg-gray-900 p-1 rounded-lg border border-gray-700">
+            <button onclick="setMainFilter('all')" id="mainFilter_all" class="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-bold transition">🔘 Semua Pesan</button>
+            <button onclick="setMainFilter('media')" id="mainFilter_media" class="px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:text-white transition">📷 Foto & Video Saja</button>
+            <button onclick="setMainFilter('text')" id="mainFilter_text" class="px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:text-white transition">💬 Teks Saja</button>
+          </div>
+
+          <!-- Tombol Hapus Semua Room Chat Sekaligus -->
+          <button onclick="clearAllRooms()" class="bg-red-950 hover:bg-red-800 border border-red-700 text-red-300 text-xs px-3 py-2 rounded-lg transition font-bold shadow flex items-center gap-1">
+            🗑️ Bersihkan SEMUA Riwayat Chat
+          </button>
+        </div>
+      </div>
+
+      <div id="roomsContainer" class="space-y-3">
+        <p class="text-gray-400">Memuat obrolan...</p>
+      </div>
     </section>
   </div>
 
   <script>
-    let token = localStorage.getItem('token');
+    let globalUsers = [];
+    let globalRooms = [];
+    let currentMainFilter = 'all';
+    let currentModalFilter = 'all';
+    let activeModalRoom = null;
+
+    const token = localStorage.getItem('token');
     if (token) showDash();
 
     async function login() {
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
-      const res = await fetch('/admin/login', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ email, password })
+      
+      try {
+        const res = await fetch('/admin/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+          showDash();
+        } else {
+          alert('Login gagal: ' + (data.error || 'Password atau email salah'));
+        }
+      } catch (err) {
+        alert('Koneksi ke server gagal.');
+      }
+    }
+
+    async function submitDummyUser(e) {
+      e.preventDefault();
+      const token = localStorage.getItem('token');
+      
+      const display_name = document.getElementById('d_name').value.trim();
+      const username = document.getElementById('d_username').value.trim();
+      const age = document.getElementById('d_age').value;
+      const gender = document.getElementById('d_gender').value;
+      const is_vip = document.getElementById('d_is_vip').checked;
+
+      const prefCheckboxes = document.querySelectorAll('input[name="pref_gender"]:checked');
+      const gender_preferences = Array.from(prefCheckboxes).map(c => c.value);
+
+      const goalCheckboxes = document.querySelectorAll('input[name="goals"]:checked');
+      const relationship_goals = Array.from(goalCheckboxes).map(c => c.value);
+
+      const photosRaw = document.getElementById('d_photos').value.trim();
+      const photos = photosRaw.split('\n').map(p => p.trim()).filter(p => p.length > 0);
+
+      if (gender_preferences.length === 0) return alert('Pilih minimal satu preferensi gender!');
+      if (relationship_goals.length === 0) return alert('Pilih minimal satu tujuan hubungan!');
+      if (photos.length < 3 || photos.length > 5) return alert('URL foto minimal 3 dan maksimal 5!');
+
+      try {
+        const res = await fetch('/admin/create-dummy-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ display_name, username, age, gender, gender_preferences, relationship_goals, photos, is_vip })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          alert(data.message);
+          document.getElementById('dummyForm').reset();
+          showDash();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (err) {
+        alert('Gagal mengirim data.');
+      }
+    }
+
+    async function toggleVip(userId) {
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch(`/admin/users/${userId}/toggle-vip`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (data.success) {
+          showDash();
+        } else {
+          alert(data.error);
+        }
+      } catch (err) {
+        alert('Gagal mengubah status VIP');
+      }
+    }
+
+    function setMainFilter(type) {
+      currentMainFilter = type;
+      ['all', 'media', 'text'].forEach(t => {
+        const btn = document.getElementById(`mainFilter_${t}`);
+        if (t === type) {
+          btn.className = 'px-3 py-1.5 rounded-lg bg-blue-600 text-white font-bold transition';
+        } else {
+          btn.className = 'px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:text-white transition';
+        }
       });
-      const data = await res.json();
-      if (data.token) {
-        localStorage.setItem('token', data.token);
+      renderRooms();
+    }
+
+    function setModalFilter(type) {
+      currentModalFilter = type;
+      ['all', 'media', 'text'].forEach(t => {
+        const btn = document.getElementById(`modalFilter_${t}`);
+        if (t === type) {
+          btn.className = 'px-3 py-1 rounded-lg bg-blue-600 text-white font-bold transition';
+        } else {
+          btn.className = 'px-3 py-1 rounded-lg bg-gray-700 text-gray-300 hover:text-white transition';
+        }
+      });
+      renderModalChat();
+    }
+
+    function filterMessages(msgs, filterType) {
+      if (filterType === 'media') {
+        return msgs.filter(m => m.message_type === 'photo' || m.message_type === 'video' || (m.media_url && m.media_url.length > 0));
+      }
+      if (filterType === 'text') {
+        return msgs.filter(m => m.message_type === 'text' && (!m.media_url || m.media_url.length === 0));
+      }
+      return msgs;
+    }
+
+    function renderRooms() {
+      if (!Array.isArray(globalRooms) || globalRooms.length === 0) {
+        document.getElementById('roomsContainer').innerHTML = '<p class="text-gray-400 py-6 text-center">Tidak ada riwayat percakapan / room match aktif saat ini.</p>';
+        return;
+      }
+
+      document.getElementById('roomsContainer').innerHTML = globalRooms.map((r) => {
+        const allMsgs = Array.isArray(r.messages) ? r.messages : [];
+        const msgs = filterMessages(allMsgs, currentMainFilter);
+        const lastMsg = msgs[msgs.length - 1] || allMsgs[allMsgs.length - 1];
+
+        return `
+          <div class="bg-gray-900 border border-gray-700 rounded-xl overflow-hidden shadow">
+            <!-- Header Room -->
+            <div class="bg-gray-800/90 px-4 py-3 border-b border-gray-700 flex flex-wrap justify-between items-center gap-2">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-white">${r.user1_name}</span>
+                ${r.user1_vip ? '<span class="text-[10px] bg-yellow-900 text-yellow-300 px-1.5 py-0.5 rounded font-bold">VIP</span>' : ''}
+                <span class="text-xs text-gray-400 font-bold">↔</span>
+                <span class="text-sm font-bold text-white">${r.user2_name}</span>
+                ${r.user2_vip ? '<span class="text-[10px] bg-yellow-900 text-yellow-300 px-1.5 py-0.5 rounded font-bold">VIP</span>' : ''}
+                <span class="text-[10px] bg-blue-900 text-blue-300 px-2 py-0.5 rounded-full ml-2">${r.connection_type}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="clearRoom('${r.connection_id}')" class="bg-red-950/80 hover:bg-red-800 border border-red-700 text-red-300 text-xs px-2.5 py-1 rounded-lg transition font-bold">
+                  🗑️ Hapus & Bersihkan
+                </button>
+                <button onclick="openRoomExpandModal('${r.connection_id}')" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow">
+                  🔍 Expand View
+                </button>
+              </div>
+            </div>
+
+            <!-- Preview Singkat Pesan -->
+            <div class="px-4 py-2.5 bg-gray-950/40 text-xs text-gray-400 flex justify-between items-center">
+              <span><b>Pesan Terakhir:</b> ${lastMsg ? (lastMsg.message_text || `[${(lastMsg.message_type || 'media').toUpperCase()}]`) : 'Belum ada obrolan'}</span>
+              <span class="font-mono text-[11px]">${r.last_message_at ? new Date(r.last_message_at).toLocaleTimeString('id-ID') : '-'}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openRoomExpandModal(connectionId) {
+      activeModalRoom = globalRooms.find(r => r.connection_id === connectionId);
+      if (!activeModalRoom) return;
+
+      document.getElementById('expandModalTitle').innerText = `${activeModalRoom.user1_name} ↔ ${activeModalRoom.user2_name}`;
+      document.getElementById('expandModalSubtitle').innerText = `Tipe: ${activeModalRoom.connection_type} · Total: ${activeModalRoom.total_messages} Pesan`;
+      document.getElementById('modalClearBtn').setAttribute('onclick', `clearRoom('${activeModalRoom.connection_id}')`);
+
+      setModalFilter('all');
+      document.getElementById('roomExpandModal').classList.remove('hidden');
+    }
+
+    function renderModalChat() {
+      if (!activeModalRoom) return;
+      const allMsgs = Array.isArray(activeModalRoom.messages) ? activeModalRoom.messages : [];
+      const msgs = filterMessages(allMsgs, currentModalFilter);
+      const body = document.getElementById('expandModalChatBody');
+
+      if (msgs.length > 0) {
+        body.innerHTML = msgs.map(m => `
+          <div class="flex flex-col ${m.sender_id === activeModalRoom.user1_id ? 'items-start' : 'items-end'}">
+            <div class="max-w-[70%] rounded-2xl px-4 py-2.5 text-sm border ${m.sender_id === activeModalRoom.user1_id ? 'bg-gray-800 border-gray-700 text-gray-200 rounded-tl-none' : 'bg-blue-900/70 border-blue-600 text-white rounded-tr-none'} shadow">
+              <div class="text-xs font-bold text-blue-300 mb-1">${m.sender_name}</div>
+              ${m.message_type === 'photo' ? `
+                <div class="space-y-1.5 my-1">
+                  <a href="/admin/media-proxy?file_id=${encodeURIComponent(m.media_url)}" target="_blank" class="block">
+                    <img src="/admin/media-proxy?file_id=${encodeURIComponent(m.media_url)}" class="rounded-xl max-h-64 w-auto object-cover border border-gray-600">
+                  </a>
+                  ${m.message_text ? `<div class="text-xs italic text-gray-300">${m.message_text}</div>` : ''}
+                </div>
+              ` : (m.message_type === 'video' ? `
+                <div class="space-y-1.5 my-1">
+                  <video controls class="rounded-xl max-h-64 max-w-full border border-gray-600 bg-black">
+                    <source src="/admin/media-proxy?file_id=${encodeURIComponent(m.media_url)}">
+                  </video>
+                  ${m.message_text ? `<div class="text-xs italic text-gray-300">${m.message_text}</div>` : ''}
+                </div>
+              ` : `
+                <div class="text-sm leading-relaxed">${m.message_text || ''}</div>
+              `)}
+              <div class="text-[10px] text-gray-400 text-right mt-1.5">${new Date(m.created_at).toLocaleString('id-ID')}</div>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        body.innerHTML = '<p class="text-center text-gray-500 py-8">Tidak ada pesan yang sesuai dengan filter ini.</p>';
+      }
+    }
+
+    function closeExpandModal() {
+      document.getElementById('roomExpandModal').classList.add('hidden');
+      activeModalRoom = null;
+    }
+
+    // HAPUS SATU ROOM MATCH (LANGSUNG HILANG DARI DASHBOARD)
+    async function clearRoom(connectionId) {
+      if (!confirm('Hapus seluruh riwayat chat dan hapus room match ini dari dashboard?')) return;
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch(`/admin/conversations/room/${connectionId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        alert(data.message || data.error);
+        closeExpandModal();
+        // Hapus langsung dari array lokal dan render ulang tampilan
+        globalRooms = globalRooms.filter(r => r.connection_id !== connectionId);
+        renderRooms();
+      } catch (err) {
+        alert('Gagal membersihkan percakapan.');
+      }
+    }
+
+    // BERSIHKAN SEMUA ROOM CHAT SEKALIGUS
+    async function clearAllRooms() {
+      if (!confirm('Yakin ingin membersihkan SEMUA riwayat percakapan dan semua room match dari dashboard?')) return;
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch('/admin/conversations/clear-all', {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        alert(data.message || data.error);
+        globalRooms = [];
+        renderRooms();
+      } catch (err) {
+        alert('Gagal membersihkan semua percakapan.');
+      }
+    }
+
+    function openPhotoModal(userId) {
+      const user = globalUsers.find(u => u.id === userId);
+      if (!user) return;
+
+      document.getElementById('modalTitle').innerText = `Galeri Foto: ${user.display_name} ${user.is_vip ? '⭐ (VIP)' : ''}`;
+      const grid = document.getElementById('modalPhotoGrid');
+
+      let photosList = [];
+      try {
+        photosList = typeof user.photos === 'string' ? JSON.parse(user.photos) : (user.photos || []);
+      } catch (e) {
+        photosList = [];
+      }
+
+      if (photosList.length > 0) {
+        grid.innerHTML = photosList.map((p, idx) => {
+          const imgSrc = `/admin/photo-view/${p.id}`;
+          return `
+            <div class="relative group rounded-xl overflow-hidden border border-gray-700 bg-gray-900 aspect-square shadow">
+              <img src="${imgSrc}" alt="Foto ${idx+1}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='${p.file_url}';">
+              ${p.is_primary ? '<span class="absolute top-2 left-2 bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow">Foto Utama</span>' : ''}
+              <a href="${imgSrc}" target="_blank" class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs font-semibold text-white transition">🔍 Buka Penuh</a>
+            </div>
+          `;
+        }).join('');
+      } else {
+        grid.innerHTML = '<p class="text-gray-400 col-span-3 text-center py-6">Belum ada foto profil.</p>';
+      }
+
+      document.getElementById('photoModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('photoModal').classList.add('hidden');
+    }
+
+    async function deleteUser(id, name) {
+      if (!confirm(`Hapus pengguna "${name}"?`)) return;
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch(`/admin/users/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        alert(data.message || data.error);
         showDash();
-      } else alert(data.error);
+      } catch (err) {
+        alert('Gagal menghapus pengguna.');
+      }
+    }
+
+    async function cleanDummies() {
+      if (!confirm('Yakin ingin menghapus semua dummy user?')) return;
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch('/admin/clean-dummy-users', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        alert(data.message || data.error);
+        showDash();
+      } catch (err) {
+        alert('Gagal menghapus data.');
+      }
     }
 
     async function showDash() {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
       document.getElementById('loginBox').classList.add('hidden');
       document.getElementById('dashboard').classList.remove('hidden');
       
-      const resUsers = await fetch('/admin/users', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } });
-      const users = await resUsers.json();
-      document.getElementById('userTable').innerHTML = `
-        <table class="w-full text-left">
-          <tr class="border-b border-gray-700"><th>Nama</th><th>Usia</th><th>Gender</th><th>Tujuan</th><th>Foto</th><th>Super Likes</th></tr>
-          ${users.map(u => `<tr class="border-b border-gray-800"><td>${u.display_name}</td><td>${u.age}</td><td>${u.gender}</td><td>${u.relationship_goals.join(', ')}</td><td>${u.photo_count}</td><td>${u.superlikes_count}</td></tr>`).join('')}
-        </table>`;
+      const authHeader = { 'Authorization': 'Bearer ' + token };
 
-      const resMsgs = await fetch('/admin/conversations', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } });
-      const msgs = await resMsgs.json();
-      document.getElementById('msgTable').innerHTML = `
-        <table class="w-full text-left">
-          <tr class="border-b border-gray-700"><th>Pengirim</th><th>Penerima</th><th>Pesan</th><th>Waktu</th></tr>
-          ${msgs.map(m => `<tr class="border-b border-gray-800"><td>${m.sender_name}</td><td>${m.receiver_name}</td><td>${m.message_text}</td><td>${new Date(m.created_at).toLocaleString()}</td></tr>`).join('')}
-        </table>`;
+      try {
+        const resUsers = await fetch('/admin/users', { headers: authHeader });
+        globalUsers = await resUsers.json();
+        
+        if (Array.isArray(globalUsers) && globalUsers.length > 0) {
+          document.getElementById('userTable').innerHTML = `
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-gray-700 text-gray-400 text-xs">
+                  <th class="pb-2">Nama & Status VIP</th>
+                  <th class="pb-2">Username Telegram</th>
+                  <th class="pb-2">Usia / Gender</th>
+                  <th class="pb-2">Tujuan</th>
+                  <th class="pb-2">Foto</th>
+                  <th class="pb-2">Aksi VIP</th>
+                  <th class="pb-2 text-right">Hapus</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-700">
+                ${globalUsers.map(u => {
+                  let pCount = 0;
+                  try {
+                    const parsed = typeof u.photos === 'string' ? JSON.parse(u.photos) : (u.photos || []);
+                    pCount = parsed.length;
+                  } catch (e) { pCount = 0; }
+
+                  return `
+                  <tr>
+                    <td class="py-2.5 font-semibold text-white">
+                      <div class="flex items-center gap-1.5">
+                        ${u.display_name}
+                        ${u.is_vip ? '<span class="bg-yellow-900/80 text-yellow-300 border border-yellow-700 text-[10px] px-1.5 py-0.5 rounded font-bold">⭐ VIP</span>' : ''}
+                      </div>
+                    </td>
+                    <td class="py-2.5 font-mono text-xs">
+                      ${u.username ? `<a href="https://t.me/${u.username}" target="_blank" class="text-blue-400 hover:underline">@${u.username}</a>` : '<span class="text-gray-500">Tanpa Username</span>'}
+                    </td>
+                    <td class="py-2.5">${u.age} thn <span class="text-gray-400 text-xs capitalize">(${u.gender})</span></td>
+                    <td class="py-2.5 text-xs text-gray-300">${Array.isArray(u.relationship_goals) ? u.relationship_goals.join(', ') : '-'}</td>
+                    <td class="py-2.5">
+                      <button onclick="openPhotoModal('${u.id}')" class="bg-blue-950/80 hover:bg-blue-900 border border-blue-700/60 text-blue-300 px-2.5 py-1 rounded-lg text-xs transition">
+                        📷 ${pCount} Foto
+                      </button>
+                    </td>
+                    <td class="py-2.5">
+                      <button onclick="toggleVip('${u.id}')" class="px-2.5 py-1 rounded-lg text-xs font-bold transition border ${u.is_vip ? 'bg-yellow-950 text-yellow-300 border-yellow-700 hover:bg-yellow-900' : 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-yellow-950 hover:text-yellow-300'}">
+                        ${u.is_vip ? '🌟 Cabut VIP' : '⭐ Jadikan VIP'}
+                      </button>
+                    </td>
+                    <td class="py-2.5 text-right">
+                      <button onclick="deleteUser('${u.id}', '${u.display_name}')" class="text-red-400 hover:text-red-300 text-xs bg-red-950/60 px-2.5 py-1 rounded border border-red-800/40">Hapus</button>
+                    </td>
+                  </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>`;
+        } else {
+          document.getElementById('userTable').innerHTML = '<p class="text-gray-400 py-3 text-center">Belum ada pengguna terdaftar.</p>';
+        }
+      } catch (err) {
+        document.getElementById('userTable').innerHTML = '<p class="text-red-400">Gagal memuat data pengguna.</p>';
+      }
+
+      try {
+        const resRooms = await fetch('/admin/grouped-conversations', { headers: authHeader });
+        globalRooms = await resRooms.json();
+        renderRooms();
+      } catch (err) {
+        document.getElementById('roomsContainer').innerHTML = '<p class="text-red-400">Gagal memuat riwayat obrolan.</p>';
+      }
     }
 
-    function logout() { localStorage.removeItem('token'); location.reload(); }
+    function logout() {
+      localStorage.removeItem('token');
+      location.reload();
+    }
   </script>
 </body>
 </html>
