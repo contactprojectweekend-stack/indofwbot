@@ -8,11 +8,17 @@ import path from 'path';
 const router = Router();
 const JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'secret';
 
+// =========================================================================
+// INISIALISASI DATABASE & SEEDER ADMIN
+// =========================================================================
 export async function seedAdmin() {
   try {
-    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_vip BOOLEAN DEFAULT FALSE');
-    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_dummy BOOLEAN DEFAULT FALSE');
+    // 1. Pastikan kolom pendukung tersedia di database
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_vip BOOLEAN DEFAULT FALSE').catch(() => {});
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_dummy BOOLEAN DEFAULT FALSE').catch(() => {});
+    await pool.query('ALTER TABLE reports ALTER COLUMN reporter_id DROP NOT NULL').catch(() => {});
 
+    // 2. Buat akun admin default jika belum ada
     const email = 'contact.projectweekend@gmail.com';
     const defaultPass = 'Indonesia';
     const check = await pool.query('SELECT id FROM admins WHERE email = $1', [email]);
@@ -29,6 +35,7 @@ export async function seedAdmin() {
   }
 }
 
+// Helper Pencatat Audit Log
 async function recordAudit(adminId: string, action: string, targetType: string, targetId: string, ip: string, meta: any) {
   try {
     await pool.query(
@@ -40,6 +47,7 @@ async function recordAudit(adminId: string, action: string, targetType: string, 
   }
 }
 
+// Middleware Otorisasi Admin
 function requireAdmin(req: any, res: any, next: any) {
   const token = req.cookies?.admin_token || req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Akses ditolak' });
@@ -51,7 +59,9 @@ function requireAdmin(req: any, res: any, next: any) {
   }
 }
 
-// 1. LOGIN ADMIN
+// =========================================================================
+// 1. AUTHENTICATION (LOGIN & GANTI PASSWORD)
+// =========================================================================
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   const ip = req.ip || '';
@@ -69,7 +79,30 @@ router.post('/login', async (req, res) => {
   res.json({ success: true, token });
 });
 
-// 2. DAFTAR PENGGUNA
+router.post('/change-password', requireAdmin, async (req: any, res) => {
+  const { oldPassword, newPassword } = req.body;
+  const ip = req.ip || '';
+
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ error: 'Password baru minimal 6 karakter' });
+  }
+
+  const adminRes = await pool.query('SELECT password_hash FROM admins WHERE id = $1', [req.admin.id]);
+  const admin = adminRes.rows[0];
+
+  const valid = await bcrypt.compare(oldPassword, admin.password_hash);
+  if (!valid) return res.status(400).json({ error: 'Password lama salah' });
+
+  const newHash = await bcrypt.hash(newPassword, 12);
+  await pool.query('UPDATE admins SET password_hash = $1 WHERE id = $2', [newHash, req.admin.id]);
+  await recordAudit(req.admin.id, 'CHANGE_PASSWORD', 'ADMIN', req.admin.id, ip, {});
+
+  res.json({ success: true, message: 'Password berhasil diubah' });
+});
+
+// =========================================================================
+// 2. MANAJEMEN PENGGUNA & STATUS VIP
+// =========================================================================
 router.get('/users', requireAdmin, async (req: any, res) => {
   const data = await pool.query(`
     SELECT u.*, 
@@ -88,7 +121,6 @@ router.get('/users', requireAdmin, async (req: any, res) => {
   res.json(data.rows);
 });
 
-// 3. TOGGLE VIP STATUS
 router.post('/users/:id/toggle-vip', requireAdmin, async (req: any, res) => {
   try {
     const { id } = req.params;
@@ -105,7 +137,9 @@ router.post('/users/:id/toggle-vip', requireAdmin, async (req: any, res) => {
   }
 });
 
-// 4. MONITORING PERCAKAPAN PER PASANGAN
+// =========================================================================
+// 3. MONITORING & BERSIHKAN PERCAKAPAN
+// =========================================================================
 router.get('/grouped-conversations', requireAdmin, async (req: any, res) => {
   try {
     const query = `
@@ -148,7 +182,6 @@ router.get('/grouped-conversations', requireAdmin, async (req: any, res) => {
   }
 });
 
-// 5. HAPUS & BERSIHKAN SATU ROOM MATCH PERCAKAPAN
 router.delete('/conversations/room/:connectionId', requireAdmin, async (req: any, res) => {
   try {
     const { connectionId } = req.params;
@@ -162,7 +195,6 @@ router.delete('/conversations/room/:connectionId', requireAdmin, async (req: any
   }
 });
 
-// 6. BERSIHKAN SEMUA RIWAYAT PERCAKAPAN SEKALIGUS
 router.delete('/conversations/clear-all', requireAdmin, async (req: any, res) => {
   try {
     await pool.query('DELETE FROM messages');
@@ -175,7 +207,9 @@ router.delete('/conversations/clear-all', requireAdmin, async (req: any, res) =>
   }
 });
 
-// 7. PROXY FOTO PROFIL PERMANEN
+// =========================================================================
+// 4. PROXY FOTO & MEDIA PERMANEN
+// =========================================================================
 router.get('/photo-view/:id', async (req, res) => {
   try {
     const photo = await pool.query('SELECT storage_path, file_url FROM user_photos WHERE id = $1', [req.params.id]);
@@ -198,7 +232,6 @@ router.get('/photo-view/:id', async (req, res) => {
   }
 });
 
-// 8. PROXY MEDIA CHAT
 router.get('/media-proxy', async (req, res) => {
   try {
     const fileId = req.query.file_id as string;
@@ -212,7 +245,9 @@ router.get('/media-proxy', async (req, res) => {
   }
 });
 
-// 9. INPUT MANUAL USER / DUMMY
+// =========================================================================
+// 5. INPUT MANUAL USER / DUMMY
+// =========================================================================
 router.post('/create-dummy-user', requireAdmin, async (req: any, res) => {
   try {
     const { display_name, username, age, gender, gender_preferences, relationship_goals, photos, is_vip } = req.body;
@@ -255,30 +290,77 @@ router.post('/create-dummy-user', requireAdmin, async (req: any, res) => {
   }
 });
 
-// 10. HAPUS PENGGUNA
+// =========================================================================
+// 6. HAPUS PENGGUNA (DENGAN SAFE CASCADE CLEANUP)
+// =========================================================================
 router.delete('/users/:id', requireAdmin, async (req: any, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    await client.query('BEGIN');
+
+    // 1. Bersihkan tabel laporan (reports)
+    await client.query('DELETE FROM reports WHERE reported_user_id = $1', [id]);
+    await client.query('DELETE FROM reports WHERE reporter_id = $1', [id]);
+
+    // 2. Bersihkan pesan, koneksi, likes, dan blocks
+    await client.query('DELETE FROM messages WHERE sender_id = $1 OR receiver_id = $1', [id]);
+    await client.query('DELETE FROM connections WHERE user_1_id = $1 OR user_2_id = $1', [id]);
+    await client.query('DELETE FROM likes WHERE from_user_id = $1 OR to_user_id = $1', [id]);
+    await client.query('DELETE FROM super_likes WHERE from_user_id = $1 OR to_user_id = $1', [id]);
+    await client.query('DELETE FROM blocks WHERE blocker_id = $1 OR blocked_id = $1', [id]);
+    await client.query('DELETE FROM user_photos WHERE user_id = $1', [id]);
+
+    // 3. Hapus user
+    await client.query('DELETE FROM users WHERE id = $1', [id]);
+
+    await client.query('COMMIT');
     await recordAudit(req.admin.id, 'DELETE_USER', 'USERS', id, req.ip || '', {});
-    res.json({ success: true, message: 'Pengguna berhasil dihapus.' });
+    res.json({ success: true, message: 'Pengguna berhasil dihapus beserta seluruh datanya.' });
   } catch (err: any) {
+    await client.query('ROLLBACK');
     res.status(500).json({ error: 'Gagal menghapus user: ' + err.message });
+  } finally {
+    client.release();
   }
 });
 
-// 11. BERSIHKAN SEMUA DUMMY
+// =========================================================================
+// 7. BERSIHKAN SEMUA DUMMY USER SECARA AMAN
+// =========================================================================
 router.post('/clean-dummy-users', requireAdmin, async (req: any, res) => {
+  const client = await pool.connect();
   try {
-    await pool.query(`DELETE FROM users WHERE is_dummy = TRUE OR telegram_id >= 999000000`);
+    await client.query('BEGIN');
+
+    const dummyIdsRes = await client.query('SELECT id FROM users WHERE is_dummy = TRUE OR telegram_id >= 999000000');
+    const dummyIds = dummyIdsRes.rows.map(r => r.id);
+
+    if (dummyIds.length > 0) {
+      await client.query('DELETE FROM reports WHERE reported_user_id = ANY($1::uuid[]) OR reporter_id = ANY($1::uuid[])', [dummyIds]);
+      await client.query('DELETE FROM messages WHERE sender_id = ANY($1::uuid[]) OR receiver_id = ANY($1::uuid[])', [dummyIds]);
+      await client.query('DELETE FROM connections WHERE user_1_id = ANY($1::uuid[]) OR user_2_id = ANY($1::uuid[])', [dummyIds]);
+      await client.query('DELETE FROM likes WHERE from_user_id = ANY($1::uuid[]) OR to_user_id = ANY($1::uuid[])', [dummyIds]);
+      await client.query('DELETE FROM super_likes WHERE from_user_id = ANY($1::uuid[]) OR to_user_id = ANY($1::uuid[])', [dummyIds]);
+      await client.query('DELETE FROM blocks WHERE blocker_id = ANY($1::uuid[]) OR blocked_id = ANY($1::uuid[])', [dummyIds]);
+      await client.query('DELETE FROM user_photos WHERE user_id = ANY($1::uuid[])', [dummyIds]);
+      await client.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [dummyIds]);
+    }
+
+    await client.query('COMMIT');
     await recordAudit(req.admin.id, 'CLEAN_DUMMIES', 'USERS', 'ALL_DUMMIES', req.ip || '', {});
-    res.json({ success: true, message: 'Semua dummy users telah dibersihkan.' });
+    res.json({ success: true, message: 'Semua dummy users telah dibersihkan secara aman.' });
   } catch (err: any) {
+    await client.query('ROLLBACK');
     res.status(500).json({ error: 'Gagal membersihkan data: ' + err.message });
+  } finally {
+    client.release();
   }
 });
 
-// 12. RENDER HALAMAN ADMIN DASHBOARD
+// =========================================================================
+// 8. RENDER HALAMAN ADMIN DASHBOARD
+// =========================================================================
 router.get('/', (req, res) => {
   const htmlPath = path.resolve(process.cwd(), 'src', 'views', 'admin.html');
   res.sendFile(htmlPath);
