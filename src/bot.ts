@@ -3,6 +3,7 @@ import { pool } from './db';
 
 export const bot = new Telegraf<any>(process.env.BOT_TOKEN!);
 
+// Global Error Handler agar bot selalu stabil
 bot.catch((err: any, ctx: any) => {
   console.error(`⚠️ Error pada update ${ctx?.update?.update_id}:`, err?.message || err);
 });
@@ -21,6 +22,7 @@ async function routeLiveChatMessage(ctx: any, msgType: 'text' | 'photo' | 'video
   if (!targetUserId) return false;
 
   try {
+    // 1. Data Pengirim
     const meRes = await pool.query('SELECT id, display_name, is_suspended FROM users WHERE telegram_id = $1', [ctx.from.id]);
     if (meRes.rowCount === 0 || meRes.rows[0].is_suspended) {
       ctx.reply('Akun kamu tidak dapat mengirim pesan.');
@@ -28,6 +30,7 @@ async function routeLiveChatMessage(ctx: any, msgType: 'text' | 'photo' | 'video
     }
     const me = meRes.rows[0];
 
+    // 2. Data Penerima
     const targetRes = await pool.query('SELECT id, telegram_id, display_name, username, is_vip, is_dummy, is_suspended FROM users WHERE id = $1', [targetUserId]);
     if (targetRes.rowCount === 0 || targetRes.rows[0].is_suspended) {
       ctx.session.chatTargetUserId = null;
@@ -36,6 +39,7 @@ async function routeLiveChatMessage(ctx: any, msgType: 'text' | 'photo' | 'video
     }
     const target = targetRes.rows[0];
 
+    // 3. Verifikasi Koneksi
     const connCheck = await pool.query(
       `SELECT id FROM connections 
        WHERE ((user_1_id = $1 AND user_2_id = $2) OR (user_1_id = $2 AND user_2_id = $1)) 
@@ -50,11 +54,13 @@ async function routeLiveChatMessage(ctx: any, msgType: 'text' | 'photo' | 'video
     }
     const connectionId = connCheck.rows[0].id;
 
+    // 4. Simpan Pesan ke Database
     await pool.query(
       'INSERT INTO messages (connection_id, sender_id, receiver_id, message_type, message_text, media_url) VALUES ($1, $2, $3, $4, $5, $6)',
       [connectionId, me.id, target.id, msgType, textContent, mediaUrl]
     );
 
+    // 5. Kirim Pesan ke Telegram Pasangan Secara Langsung
     const targetTgId = Number(target.telegram_id);
     const replyBtn = Markup.inlineKeyboard([
       [Markup.button.callback(`💬 Masuk Room & Balas ${me.display_name}`, `startchat_${me.id}`)]
@@ -86,6 +92,7 @@ async function routeLiveChatMessage(ctx: any, msgType: 'text' | 'photo' | 'video
 
     await ctx.reply(`✅ Pesan terkirim ke *${target.display_name}*.`, { parse_mode: 'Markdown', ...exitChatBtn });
 
+    // Auto-reply jika target akun VIP Dummy
     if (target.is_vip && target.is_dummy) {
       setTimeout(async () => {
         const vipUser = target.username ? `@${target.username}` : 'VIP';
@@ -104,7 +111,7 @@ async function routeLiveChatMessage(ctx: any, msgType: 'text' | 'photo' | 'video
 }
 
 // =========================================================================
-// 1. COMMAND /START & REGISTRASI
+// 1. COMMAND /START & REGISTRASI (DENGAN INPUT NAMA AWAL)
 // =========================================================================
 bot.command('start', async (ctx) => {
   try {
@@ -143,12 +150,13 @@ bot.command('start', async (ctx) => {
 });
 
 // =========================================================================
-// 2. TEXT HANDLER
+// 2. TEXT HANDLER (REGISTRASI, EDIT & CHAT)
 // =========================================================================
 bot.on('text', async (ctx, next) => {
   const step = ctx.session?.step;
   const text = ctx.message.text;
 
+  // Live Chat Mode
   if (ctx.session?.chatTargetUserId && !text.startsWith('/')) {
     const handled = await routeLiveChatMessage(ctx, 'text', text);
     if (handled) return;
@@ -218,7 +226,7 @@ bot.on('text', async (ctx, next) => {
 });
 
 // =========================================================================
-// 3. GENDER, PREFERENSI & GOALS REGISTRASI
+// 3. HANDLER GENDER, PREFERENSI & GOALS REGISTRASI
 // =========================================================================
 bot.action(/^gender_(.+)$/, async (ctx) => {
   await ctx.answerCbQuery().catch(() => {});
@@ -298,6 +306,7 @@ bot.action(/^goal_(.+)$/, async (ctx) => {
     ).catch(() => {});
   }
 
+  // Pilihan "Semua" pada Tujuan Hubungan
   if (val === 'Semua') {
     if (ctx.session.regGoals.includes('Semua')) {
       ctx.session.regGoals = [];
@@ -347,9 +356,9 @@ function renderGoalKeyboard(selected: string[] = [], isEdit: boolean = false) {
   ]);
 }
 
-// =========================================================================
+// ==========================================
 // 4. PHOTO HANDLER DENGAN SISTEM EDIT & GANTI
-// =========================================================================
+// ==========================================
 bot.on('photo', async (ctx) => {
   try {
     const msg = ctx.message;
@@ -481,7 +490,7 @@ async function showProfileCard(ctx: any) {
     const cardText = 
       `👤 *KARTU PROFIL SAYA*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `📛 *Nama*: ${u.display_name} ${u.is_vip ? '⭐ [VIP]' : ''}\n` +
+      `📛 *Nama*: ${u.display_name} ${u.is_vip ? '⭐ [VIP Member]' : ''}\n` +
       `🎂 *Usia*: ${u.age} tahun\n` +
       `⚧ *Gender*: ${u.gender}\n` +
       `🔎 *Mencari*: ${prefsStr}\n` +
@@ -822,7 +831,7 @@ bot.action('back_to_profile', async (ctx) => {
 });
 
 // ==========================================
-// 6. DISCOVERY & MATCHING ENGINE
+// 6. DISCOVERY & MATCHING ENGINE (RESET SKIP)
 // ==========================================
 bot.hears('🔎 Cari FWB', async (ctx) => {
   await findNextMatch(ctx);
@@ -868,8 +877,10 @@ async function findNextMatch(ctx: any) {
       skippedIds
     ]);
 
+    // JIKA KANDIDAT HABIS -> RESET SKIP AGAR PERPUTARAN BISA DIULANG KEMBALI
     if (candidateRes.rowCount === 0) {
-      return ctx.reply('Belum ada kandidat baru yang cocok, yuk invite temen kamu biar makin banyak yang main FWBot ini');
+      ctx.session.skippedUserIds = []; // Reset perputaran skip
+      return ctx.reply('Belum ada kandidat baru yang cocok, yuk invite temenmu buat join @indofwbot , bisa juga maen anon chat based on gender FREE di @anonlokal_bot');
     }
 
     const c = candidateRes.rows[0];
@@ -877,7 +888,7 @@ async function findNextMatch(ctx: any) {
     const isVip = c.is_vip === true;
 
     const titleName = isVip ? `⭐ VIP ${c.display_name}, ${c.age} ⭐` : `${c.display_name}, ${c.age}`;
-    const vipTag = isVip ? `🌟 *Status*: VIP Verified Member\n` : '';
+    const vipTag = isVip ? `🌟 *Status*: VIP Member\n` : '';
 
     const caption = 
       `*${titleName}*\n\n` +
@@ -893,6 +904,7 @@ async function findNextMatch(ctx: any) {
         Markup.button.callback('❌ Skip', `act_skip_${c.id}`)
       ],
       [
+        Markup.button.callback(`📷 Lihat Semua Foto (${c.photo_count})`, `view_cand_photos_${c.id}`),
         Markup.button.callback('🚫 Block', `act_block_${c.id}`),
         Markup.button.callback('⚠️ Report', `act_rep_${c.id}`)
       ]
@@ -914,6 +926,29 @@ async function findNextMatch(ctx: any) {
   }
 }
 
+// LIHAT SEMUA FOTO KANDIDAT DI DISCOVERY
+bot.action(/^view_cand_photos_(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery().catch(() => {});
+  try {
+    const candId = ctx.match[1];
+    const photosRes = await pool.query('SELECT * FROM user_photos WHERE user_id = $1 ORDER BY is_primary DESC, created_at ASC', [candId]);
+    const photos = photosRes.rows;
+
+    if (photos.length === 0) return ctx.reply('Tidak ada foto tambahan.');
+
+    for (let i = 0; i < photos.length; i++) {
+      const p = photos[i];
+      const cap = p.is_primary ? `📸 Foto ${i+1}: *Foto Selfie Kamera Depan*` : `📸 Foto ${i+1}: Foto Profil`;
+      const photoPayload = p.storage_path && !p.storage_path.startsWith('http') ? p.storage_path : p.file_url;
+      try {
+        await ctx.replyWithPhoto(photoPayload, { caption: cap, parse_mode: 'Markdown' });
+      } catch {}
+    }
+  } catch (e) {
+    return ctx.reply('Gagal memuat semua foto kandidat.');
+  }
+});
+
 // ==========================================
 // 7. ACTIONS (LIKE, SUPER LIKE, SKIP, BLOCK, REPORT)
 // ==========================================
@@ -934,6 +969,7 @@ bot.action(/^act_like_(.+)$/, async (ctx) => {
       const target = (await pool.query('SELECT telegram_id, display_name, username, is_vip, is_dummy FROM users WHERE id = $1', [targetId])).rows[0];
       const isTargetVip = target.is_vip === true;
 
+      // HANYA JIKA TARGET VIP -> Berikan Link Telegram VIP
       if (isTargetVip) {
         const vipBtns = target.username ? [
           [Markup.button.url(`💬 Chat Langsung di Telegram ⭐ @${target.username} ⭐`, `https://t.me/${target.username}`)],
@@ -950,6 +986,7 @@ bot.action(/^act_like_(.+)$/, async (ctx) => {
           { parse_mode: 'Markdown', ...Markup.inlineKeyboard(vipBtns) }
         );
       } else {
+        // PENGGUNA REGULER (PRIVASI 100% TERJAGA TANPA USERNAME)
         const realBtns = [
           [Markup.button.callback(`💬 Chat dengan ${target.display_name}`, `startchat_${targetId}`)]
         ];
@@ -1045,6 +1082,7 @@ bot.action(/^act_sl_(.+)$/, async (ctx) => {
   }
 });
 
+// Aksi Skip (Lanjut ke Profil Selanjutnya)
 bot.action(/^act_skip_(.+)$/, async (ctx) => {
   await ctx.answerCbQuery('Dilewati').catch(() => {});
   const targetId = ctx.match[1];
@@ -1055,6 +1093,7 @@ bot.action(/^act_skip_(.+)$/, async (ctx) => {
   return findNextMatch(ctx);
 });
 
+// Aksi Block (Blokir Permanen)
 bot.action(/^act_block_(.+)$/, async (ctx) => {
   await ctx.answerCbQuery('Pengguna telah diblokir secara permanen.').catch(() => {});
   try {
