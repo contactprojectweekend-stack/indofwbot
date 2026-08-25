@@ -10,26 +10,22 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors());
 
-// Redirect root '/' langsung ke Admin Dashboard
 app.get('/', (req, res) => {
   res.redirect('/admin');
 });
 
-// Endpoint Khusus Webhook Telegram Bot
 app.post('/api/webhook', async (req, res) => {
   try {
     await bot.handleUpdate(req.body);
     res.status(200).send('OK');
   } catch (err) {
-    console.error('Error Webhook:', err);
+    console.error('Error webhook:', err);
     res.status(500).send('Error');
   }
 });
 
-// Route Admin Dashboard
 app.use('/admin', adminRouter);
 
-// Jalankan seeder admin awal
 seedAdmin().catch(console.error);
 
 export default app;
