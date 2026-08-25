@@ -13,7 +13,9 @@ bot.use((ctx, next) => {
   return next();
 });
 
-// Helper Pengirim Pesan Live Chat Room 2 Arah
+// =========================================================================
+// ROUTER PESAN CHAT 2 ARAH (DENGAN TOMBOL KELUAR ROOM CHAT)
+// =========================================================================
 async function routeLiveChatMessage(ctx: any, msgType: 'text' | 'photo' | 'video', textContent: string = '', mediaUrl: string = '') {
   const targetUserId = ctx.session?.chatTargetUserId;
   if (!targetUserId) return false;
@@ -101,17 +103,19 @@ async function routeLiveChatMessage(ctx: any, msgType: 'text' | 'photo' | 'video
   }
 }
 
-// ==========================================
+// =========================================================================
 // 1. COMMAND /START & REGISTRASI
-// ==========================================
+// =========================================================================
 bot.command('start', async (ctx) => {
   try {
     const tgId = ctx.from.id;
+    const currentUsername = ctx.from.username || '';
+
     const userRes = await pool.query('SELECT * FROM users WHERE telegram_id = $1', [tgId]);
 
     if (userRes.rowCount === 0) {
       ctx.session.step = 'ASK_NAME';
-      return ctx.reply('Selamat datang di FWBot!\n\nSiapa nama panggilan / display name kamu?');
+      return ctx.reply('Selamat datang di Casual Match!\n\nSiapa nama panggilan / display name kamu?');
     }
 
     const user = userRes.rows[0];
@@ -138,9 +142,9 @@ bot.command('start', async (ctx) => {
   }
 });
 
-// ==========================================
+// =========================================================================
 // 2. TEXT HANDLER
-// ==========================================
+// =========================================================================
 bot.on('text', async (ctx, next) => {
   const step = ctx.session?.step;
   const text = ctx.message.text;
@@ -150,7 +154,7 @@ bot.on('text', async (ctx, next) => {
     if (handled) return;
   }
 
-  // Input Nama
+  // Registrasi: Input Nama
   if (step === 'ASK_NAME') {
     const name = text.trim();
     if (name.length < 2 || name.length > 40) {
@@ -159,14 +163,17 @@ bot.on('text', async (ctx, next) => {
 
     ctx.session.regName = name;
     ctx.session.step = 'ASK_AGE';
+
     return ctx.reply(`Halo *${name}*! 👋\n\nBerapa usia kamu sekarang? (Kirim angka, minimal 18):`, { parse_mode: 'Markdown' });
   }
 
-  // Input Usia
+  // Registrasi: Input Usia
   if (step === 'ASK_AGE') {
     const age = parseInt(text, 10);
     if (isNaN(age)) return ctx.reply('Usia harus berupa angka. Masukkan usia kamu:');
-    if (age < 18) return ctx.reply('Bot ini hanya tersedia untuk pengguna berusia 18 tahun ke atas.');
+    if (age < 18) {
+      return ctx.reply('Bot ini hanya tersedia untuk pengguna berusia 18 tahun ke atas.');
+    }
 
     const regName = ctx.session?.regName || ctx.from.first_name || 'User';
 
@@ -179,7 +186,6 @@ bot.on('text', async (ctx, next) => {
 
     ctx.session.step = 'ASK_GENDER';
 
-    // Pilihan Gender dengan Icon Menarik
     return ctx.reply(
       'Gender kamu?',
       Markup.inlineKeyboard([
@@ -192,28 +198,28 @@ bot.on('text', async (ctx, next) => {
 
   if (step === 'EDIT_NAME') {
     const newName = text.trim();
-    if (newName.length < 2 || newName.length > 40) return ctx.reply('Nama minimal 2 dan maksimal 40 karakter.');
+    if (newName.length < 2 || newName.length > 40) return ctx.reply('Nama tampilan minimal 2 dan maksimal 40 karakter.');
     await pool.query('UPDATE users SET display_name = $1 WHERE telegram_id = $2', [newName, ctx.from.id]);
     ctx.session.step = null;
-    await ctx.reply(`✅ Nama tampilan diubah menjadi: *${newName}*`, { parse_mode: 'Markdown' });
+    await ctx.reply(`✅ Nama tampilan berhasil diubah menjadi: *${newName}*`, { parse_mode: 'Markdown' });
     return showProfileCard(ctx);
   }
 
   if (step === 'EDIT_AGE') {
     const age = parseInt(text, 10);
-    if (isNaN(age) || age < 18 || age > 99) return ctx.reply('Usia harus angka dan minimal 18 tahun.');
+    if (isNaN(age) || age < 18 || age > 99) return ctx.reply('Usia harus berupa angka dan minimal 18 tahun.');
     await pool.query('UPDATE users SET age = $1 WHERE telegram_id = $2', [age, ctx.from.id]);
     ctx.session.step = null;
-    await ctx.reply(`✅ Usia diubah menjadi: *${age} tahun*`);
+    await ctx.reply(`✅ Usia berhasil diubah menjadi: *${age} tahun*`);
     return showProfileCard(ctx);
   }
 
   return next();
 });
 
-// ==========================================
-// 3. GENDER, PREFERENSI & GOALS
-// ==========================================
+// =========================================================================
+// 3. GENDER, PREFERENSI & GOALS REGISTRASI
+// =========================================================================
 bot.action(/^gender_(.+)$/, async (ctx) => {
   await ctx.answerCbQuery().catch(() => {});
   const gender = ctx.match[1];
@@ -292,7 +298,6 @@ bot.action(/^goal_(.+)$/, async (ctx) => {
     ).catch(() => {});
   }
 
-  // Pilihan "Semua" pada Tujuan Hubungan
   if (val === 'Semua') {
     if (ctx.session.regGoals.includes('Semua')) {
       ctx.session.regGoals = [];
@@ -342,9 +347,9 @@ function renderGoalKeyboard(selected: string[] = [], isEdit: boolean = false) {
   ]);
 }
 
-// ==========================================
-// 4. PHOTO HANDLER DENGAN SISTEM GANTI & EDIT
-// ==========================================
+// =========================================================================
+// 4. PHOTO HANDLER DENGAN SISTEM EDIT & GANTI
+// =========================================================================
 bot.on('photo', async (ctx) => {
   try {
     const msg = ctx.message;
@@ -407,7 +412,7 @@ bot.on('photo', async (ctx) => {
 
     if (!user.profile_completed) {
       if (newCount === 1) {
-        return ctx.reply('✅ *Foto 1 (Selfie Kamera Depan) tersimpan!*\n\n📸 Sekarang kirimkan *Foto 2/3 (Foto Bebas/Aktivitas)*:', { parse_mode: 'Markdown' });
+        return ctx.reply('✅ *Foto 1 (Selfie Kamera Depan) tersimpan!*\n\n📸 Sekarang silakan kirimkan *Foto 2/3 (Foto Bebas/Aktivitas)*:', { parse_mode: 'Markdown' });
       } else if (newCount === 2) {
         return ctx.reply('✅ *Foto 2 berhasil disimpan!*\n\n📸 Sekarang kirimkan *Foto 3/3 (Foto Bebas)* untuk mengaktifkan profil kamu:', { parse_mode: 'Markdown' });
       } else if (newCount >= 3) {
@@ -585,6 +590,7 @@ bot.action(/^setg_(.+)$/, async (ctx) => {
   return showProfileCard(ctx);
 });
 
+// Edit Preferensi Gender
 bot.action('btn_edit_pref', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {});
   try {
@@ -654,6 +660,7 @@ bot.action('edit_pref_save', async (ctx) => {
   }
 });
 
+// Edit Tujuan Hubungan
 bot.action('btn_edit_goals', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {});
   try {
@@ -862,7 +869,7 @@ async function findNextMatch(ctx: any) {
     ]);
 
     if (candidateRes.rowCount === 0) {
-      return ctx.reply('Belum ada kandidat baru yang cocok, yuk invite temen kamu biar makin banyak yang main @indofwbot ini. Yang mau chat anon based on gender free bisa langsung ke @anonlokal_bot');
+      return ctx.reply('Belum ada kandidat baru yang cocok, yuk invite temen kamu biar makin banyak yang main FWBot ini');
     }
 
     const c = candidateRes.rows[0];
@@ -908,7 +915,7 @@ async function findNextMatch(ctx: any) {
 }
 
 // ==========================================
-// 7. ACTIONS (LIKE, SUPER LIKE, SKIP, BLOCK, REPORT KE @pramdka)
+// 7. ACTIONS (LIKE, SUPER LIKE, SKIP, BLOCK, REPORT)
 // ==========================================
 bot.action(/^act_like_(.+)$/, async (ctx) => {
   await ctx.answerCbQuery('❤️ Disukai!').catch(() => {});
@@ -1038,7 +1045,6 @@ bot.action(/^act_sl_(.+)$/, async (ctx) => {
   }
 });
 
-// Aksi Skip (Lanjut ke Profil Selanjutnya)
 bot.action(/^act_skip_(.+)$/, async (ctx) => {
   await ctx.answerCbQuery('Dilewati').catch(() => {});
   const targetId = ctx.match[1];
@@ -1049,16 +1055,13 @@ bot.action(/^act_skip_(.+)$/, async (ctx) => {
   return findNextMatch(ctx);
 });
 
-// Aksi Block (Blokir Permanen)
 bot.action(/^act_block_(.+)$/, async (ctx) => {
   await ctx.answerCbQuery('Pengguna telah diblokir secara permanen.').catch(() => {});
   try {
     const targetId = ctx.match[1];
     const me = (await pool.query('SELECT id FROM users WHERE telegram_id = $1', [ctx.from!.id])).rows[0];
 
-    // Simpan ke tabel blocks
     await pool.query('INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [me.id, targetId]);
-    // Nonaktifkan koneksi jika ada
     await pool.query(`UPDATE connections SET status = 'BLOCKED' WHERE ((user_1_id = $1 AND user_2_id = $2) OR (user_1_id = $2 AND user_2_id = $1))`, [me.id, targetId]);
 
     await ctx.deleteMessage().catch(() => {});
@@ -1068,18 +1071,18 @@ bot.action(/^act_block_(.+)$/, async (ctx) => {
   }
 });
 
-// Aksi Report (Otomatis Kirim ke Telegram @pramdka)
+// Aksi Report (Privasi Aman Tanpa Menyebut @pramdka ke Pengguna)
 bot.action(/^act_rep_(.+)$/, async (ctx) => {
-  await ctx.answerCbQuery('Laporan telah dikirimkan ke Admin (@pramdka).').catch(() => {});
+  await ctx.answerCbQuery('⚠️ Laporan kamu telah dikirim ke Tim Moderasi untuk ditinjau.', { show_alert: true });
   try {
     const targetId = ctx.match[1];
     const me = (await pool.query('SELECT id, telegram_id, display_name, username FROM users WHERE telegram_id = $1', [ctx.from!.id])).rows[0];
     const target = (await pool.query('SELECT id, telegram_id, display_name, username FROM users WHERE id = $1', [targetId])).rows[0];
 
-    // 1. Simpan ke database laporan
+    // 1. Simpan ke database laporan (muncul di admin dashboard)
     await pool.query('INSERT INTO reports (reporter_id, reported_user_id, reason) VALUES ($1, $2, $3)', [me.id, targetId, 'Dilaporkan dari Discovery Card']);
 
-    // 2. Kirim Notifikasi Laporan Langsung ke Akun Telegram @pramdka
+    // 2. Kirim notifikasi senyap ke admin jika terdaftar
     const reportAlert = 
       `🚨 *LAPORAN PENGGUNA MASUK*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +

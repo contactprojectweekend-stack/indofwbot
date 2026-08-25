@@ -8,17 +8,12 @@ import path from 'path';
 const router = Router();
 const JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'secret';
 
-// =========================================================================
-// INISIALISASI DATABASE & SEEDER ADMIN
-// =========================================================================
 export async function seedAdmin() {
   try {
-    // 1. Pastikan kolom pendukung tersedia di database
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_vip BOOLEAN DEFAULT FALSE').catch(() => {});
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_dummy BOOLEAN DEFAULT FALSE').catch(() => {});
     await pool.query('ALTER TABLE reports ALTER COLUMN reporter_id DROP NOT NULL').catch(() => {});
 
-    // 2. Buat akun admin default jika belum ada
     const email = 'contact.projectweekend@gmail.com';
     const defaultPass = 'Indonesia';
     const check = await pool.query('SELECT id FROM admins WHERE email = $1', [email]);
@@ -35,7 +30,6 @@ export async function seedAdmin() {
   }
 }
 
-// Helper Pencatat Audit Log
 async function recordAudit(adminId: string, action: string, targetType: string, targetId: string, ip: string, meta: any) {
   try {
     await pool.query(
@@ -47,7 +41,6 @@ async function recordAudit(adminId: string, action: string, targetType: string, 
   }
 }
 
-// Middleware Otorisasi Admin
 function requireAdmin(req: any, res: any, next: any) {
   const token = req.cookies?.admin_token || req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Akses ditolak' });
@@ -59,9 +52,7 @@ function requireAdmin(req: any, res: any, next: any) {
   }
 }
 
-// =========================================================================
-// 1. AUTHENTICATION (LOGIN & GANTI PASSWORD)
-// =========================================================================
+// 1. LOGIN ADMIN
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   const ip = req.ip || '';
@@ -79,30 +70,7 @@ router.post('/login', async (req, res) => {
   res.json({ success: true, token });
 });
 
-router.post('/change-password', requireAdmin, async (req: any, res) => {
-  const { oldPassword, newPassword } = req.body;
-  const ip = req.ip || '';
-
-  if (!newPassword || newPassword.length < 6) {
-    return res.status(400).json({ error: 'Password baru minimal 6 karakter' });
-  }
-
-  const adminRes = await pool.query('SELECT password_hash FROM admins WHERE id = $1', [req.admin.id]);
-  const admin = adminRes.rows[0];
-
-  const valid = await bcrypt.compare(oldPassword, admin.password_hash);
-  if (!valid) return res.status(400).json({ error: 'Password lama salah' });
-
-  const newHash = await bcrypt.hash(newPassword, 12);
-  await pool.query('UPDATE admins SET password_hash = $1 WHERE id = $2', [newHash, req.admin.id]);
-  await recordAudit(req.admin.id, 'CHANGE_PASSWORD', 'ADMIN', req.admin.id, ip, {});
-
-  res.json({ success: true, message: 'Password berhasil diubah' });
-});
-
-// =========================================================================
-// 2. MANAJEMEN PENGGUNA & STATUS VIP
-// =========================================================================
+// 2. DAFTAR PENGGUNA
 router.get('/users', requireAdmin, async (req: any, res) => {
   const data = await pool.query(`
     SELECT u.*, 
@@ -121,6 +89,7 @@ router.get('/users', requireAdmin, async (req: any, res) => {
   res.json(data.rows);
 });
 
+// 3. TOGGLE VIP STATUS
 router.post('/users/:id/toggle-vip', requireAdmin, async (req: any, res) => {
   try {
     const { id } = req.params;
@@ -137,9 +106,7 @@ router.post('/users/:id/toggle-vip', requireAdmin, async (req: any, res) => {
   }
 });
 
-// =========================================================================
-// 3. MONITORING & BERSIHKAN PERCAKAPAN
-// =========================================================================
+// 4. MONITORING PERCAKAPAN
 router.get('/grouped-conversations', requireAdmin, async (req: any, res) => {
   try {
     const query = `
@@ -182,6 +149,54 @@ router.get('/grouped-conversations', requireAdmin, async (req: any, res) => {
   }
 });
 
+// 5. MONITORING LAPORAN PENGGUNA (REPORTS)
+router.get('/reports', requireAdmin, async (req: any, res) => {
+  try {
+    const query = `
+      SELECT 
+        r.*,
+        u1.display_name AS reporter_name, u1.username AS reporter_username, u1.telegram_id AS reporter_tg,
+        u2.display_name AS reported_name, u2.username AS reported_username, u2.telegram_id AS reported_tg,
+        (SELECT file_url FROM user_photos up WHERE up.user_id = u2.id AND up.is_primary = true LIMIT 1) AS reported_photo
+      FROM reports r
+      LEFT JOIN users u1 ON r.reporter_id = u1.id
+      JOIN users u2 ON r.reported_user_id = u2.id
+      ORDER BY r.created_at DESC
+      LIMIT 100
+    `;
+    const data = await pool.query(query);
+    await recordAudit(req.admin.id, 'VIEW_REPORTS', 'REPORTS', 'ALL', req.ip || '', {});
+    res.json(data.rows);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Gagal mengambil data laporan: ' + err.message });
+  }
+});
+
+// 6. TANDAI LAPORAN SELESAI
+router.post('/reports/:id/resolve', requireAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query("UPDATE reports SET status = 'RESOLVED', resolved_at = NOW() WHERE id = $1", [id]);
+    await recordAudit(req.admin.id, 'RESOLVE_REPORT', 'REPORTS', id, req.ip || '', {});
+    res.json({ success: true, message: 'Laporan ditandai selesai.' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Gagal memproses laporan: ' + err.message });
+  }
+});
+
+// 7. HAPUS LAPORAN
+router.delete('/reports/:id', requireAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM reports WHERE id = $1', [id]);
+    await recordAudit(req.admin.id, 'DELETE_REPORT', 'REPORTS', id, req.ip || '', {});
+    res.json({ success: true, message: 'Laporan berhasil dihapus.' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Gagal menghapus laporan: ' + err.message });
+  }
+});
+
+// 8. HAPUS SATU ROOM MATCH PERCAKAPAN
 router.delete('/conversations/room/:connectionId', requireAdmin, async (req: any, res) => {
   try {
     const { connectionId } = req.params;
@@ -195,6 +210,7 @@ router.delete('/conversations/room/:connectionId', requireAdmin, async (req: any
   }
 });
 
+// 9. BERSIHKAN SEMUA RIWAYAT PERCAKAPAN
 router.delete('/conversations/clear-all', requireAdmin, async (req: any, res) => {
   try {
     await pool.query('DELETE FROM messages');
@@ -207,9 +223,103 @@ router.delete('/conversations/clear-all', requireAdmin, async (req: any, res) =>
   }
 });
 
-// =========================================================================
-// 4. PROXY FOTO & MEDIA PERMANEN
-// =========================================================================
+// 10. GENERATE 5 DUMMY USERS RANDOM OTOMATIS
+router.post('/generate-random-dummies', requireAdmin, async (req: any, res) => {
+  try {
+    const dummySets = [
+      {
+        name: 'Amanda Putri',
+        gender: 'wanita',
+        age: 23,
+        photos: [
+          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600',
+          'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600',
+          'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600'
+        ]
+      },
+      {
+        name: 'Dimas Aditya',
+        gender: 'pria',
+        age: 26,
+        photos: [
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600',
+          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600',
+          'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=600'
+        ]
+      },
+      {
+        name: 'Jessica Tan',
+        gender: 'wanita',
+        age: 25,
+        photos: [
+          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600',
+          'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=600',
+          'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=600'
+        ]
+      },
+      {
+        name: 'Kevin Sanjaya',
+        gender: 'pria',
+        age: 27,
+        photos: [
+          'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600',
+          'https://images.unsplash.com/photo-1496345875659-11f7dd282d1d?w=600',
+          'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=600'
+        ]
+      },
+      {
+        name: 'Clara Wijaya',
+        gender: 'wanita',
+        age: 22,
+        photos: [
+          'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600',
+          'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=600',
+          'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=600'
+        ]
+      }
+    ];
+
+    const allGoals = ['FWB', 'ONS', 'Virtual'];
+    const allPrefs = [
+      ['pria'],
+      ['wanita'],
+      ['pria', 'wanita'],
+      ['pria', 'wanita', 'non-biner', 'lainnya', 'tidak_disebutkan']
+    ];
+
+    for (const d of dummySets) {
+      const fakeTgId = 999000000 + Math.floor(Math.random() * 999999);
+      const cleanUsername = `user_${fakeTgId}`;
+      const randomGoals = allGoals.filter(() => Math.random() > 0.3);
+      const finalGoals = randomGoals.length > 0 ? randomGoals : ['FWB'];
+      const randomPrefs = allPrefs[Math.floor(Math.random() * allPrefs.length)];
+      const isVip = Math.random() > 0.5;
+
+      const userRes = await pool.query(
+        `INSERT INTO users (telegram_id, username, display_name, age, gender, gender_preferences, relationship_goals, profile_completed, is_active, is_vip, is_dummy)
+         VALUES ($1, $2, $3, $4, $5::gender_type, $6::gender_type[], $7::goal_type[], TRUE, TRUE, $8, TRUE)
+         RETURNING id`,
+        [fakeTgId, cleanUsername, d.name, d.age, d.gender, randomPrefs, finalGoals, isVip]
+      );
+
+      const newUserId = userRes.rows[0].id;
+
+      for (let i = 0; i < d.photos.length; i++) {
+        await pool.query(
+          `INSERT INTO user_photos (user_id, storage_path, file_url, is_primary) VALUES ($1, $2, $3, $4)`,
+          [newUserId, d.photos[i], d.photos[i], i === 0]
+        );
+      }
+    }
+
+    await recordAudit(req.admin.id, 'GENERATE_5_RANDOM_DUMMIES', 'USERS', '5_USERS', req.ip || '', {});
+    res.json({ success: true, message: '5 Dummy User acak berhasil dibuat lengkap dengan foto, preferensi, dan tujuan hubungan random!' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Gagal membuat dummy acak: ' + err.message });
+  }
+});
+
+// 11. PROXY FOTO & MEDIA
 router.get('/photo-view/:id', async (req, res) => {
   try {
     const photo = await pool.query('SELECT storage_path, file_url FROM user_photos WHERE id = $1', [req.params.id]);
@@ -245,9 +355,7 @@ router.get('/media-proxy', async (req, res) => {
   }
 });
 
-// =========================================================================
-// 5. INPUT MANUAL USER / DUMMY
-// =========================================================================
+// 12. INPUT MANUAL USER / DUMMY
 router.post('/create-dummy-user', requireAdmin, async (req: any, res) => {
   try {
     const { display_name, username, age, gender, gender_preferences, relationship_goals, photos, is_vip } = req.body;
@@ -290,28 +398,20 @@ router.post('/create-dummy-user', requireAdmin, async (req: any, res) => {
   }
 });
 
-// =========================================================================
-// 6. HAPUS PENGGUNA (DENGAN SAFE CASCADE CLEANUP)
-// =========================================================================
+// 13. HAPUS PENGGUNA
 router.delete('/users/:id', requireAdmin, async (req: any, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
     await client.query('BEGIN');
 
-    // 1. Bersihkan tabel laporan (reports)
-    await client.query('DELETE FROM reports WHERE reported_user_id = $1', [id]);
-    await client.query('DELETE FROM reports WHERE reporter_id = $1', [id]);
-
-    // 2. Bersihkan pesan, koneksi, likes, dan blocks
+    await client.query('DELETE FROM reports WHERE reported_user_id = $1 OR reporter_id = $1', [id]);
     await client.query('DELETE FROM messages WHERE sender_id = $1 OR receiver_id = $1', [id]);
     await client.query('DELETE FROM connections WHERE user_1_id = $1 OR user_2_id = $1', [id]);
     await client.query('DELETE FROM likes WHERE from_user_id = $1 OR to_user_id = $1', [id]);
     await client.query('DELETE FROM super_likes WHERE from_user_id = $1 OR to_user_id = $1', [id]);
     await client.query('DELETE FROM blocks WHERE blocker_id = $1 OR blocked_id = $1', [id]);
     await client.query('DELETE FROM user_photos WHERE user_id = $1', [id]);
-
-    // 3. Hapus user
     await client.query('DELETE FROM users WHERE id = $1', [id]);
 
     await client.query('COMMIT');
@@ -325,9 +425,7 @@ router.delete('/users/:id', requireAdmin, async (req: any, res) => {
   }
 });
 
-// =========================================================================
-// 7. BERSIHKAN SEMUA DUMMY USER SECARA AMAN
-// =========================================================================
+// 14. BERSIHKAN SEMUA DUMMY
 router.post('/clean-dummy-users', requireAdmin, async (req: any, res) => {
   const client = await pool.connect();
   try {
@@ -349,7 +447,7 @@ router.post('/clean-dummy-users', requireAdmin, async (req: any, res) => {
 
     await client.query('COMMIT');
     await recordAudit(req.admin.id, 'CLEAN_DUMMIES', 'USERS', 'ALL_DUMMIES', req.ip || '', {});
-    res.json({ success: true, message: 'Semua dummy users telah dibersihkan secara aman.' });
+    res.json({ success: true, message: 'Semua dummy users telah dibersihkan.' });
   } catch (err: any) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: 'Gagal membersihkan data: ' + err.message });
@@ -358,9 +456,7 @@ router.post('/clean-dummy-users', requireAdmin, async (req: any, res) => {
   }
 });
 
-// =========================================================================
-// 8. RENDER HALAMAN ADMIN DASHBOARD
-// =========================================================================
+// 15. RENDER HALAMAN ADMIN DASHBOARD
 router.get('/', (req, res) => {
   const htmlPath = path.resolve(process.cwd(), 'src', 'views', 'admin.html');
   res.sendFile(htmlPath);

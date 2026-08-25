@@ -24,7 +24,6 @@
         </div>
       </div>
 
-      <!-- Filter Media dalam Modal -->
       <div class="flex gap-2 text-xs">
         <button onclick="setModalFilter('all')" id="modalFilter_all" class="px-3 py-1 rounded-lg bg-blue-600 text-white font-bold transition">🔘 Semua Pesan</button>
         <button onclick="setModalFilter('media')" id="modalFilter_media" class="px-3 py-1 rounded-lg bg-gray-700 text-gray-300 hover:text-white transition">📷 Foto & Video Saja</button>
@@ -68,7 +67,7 @@
     <header class="flex flex-wrap justify-between items-center bg-gray-800 p-4 rounded-xl border border-gray-700">
       <div>
         <h1 class="text-xl font-bold text-blue-400">Casual Match Admin Panel</h1>
-        <p class="text-xs text-gray-400">Kelola Akun VIP, Pengguna & Obrolan Pasangan Match</p>
+        <p class="text-xs text-gray-400">Kelola Akun VIP, Pengguna, Laporan & Obrolan Pasangan</p>
       </div>
       <div class="flex gap-2 mt-2 sm:mt-0">
         <button onclick="showDash()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-sm">🔄 Refresh</button>
@@ -76,18 +75,26 @@
       </div>
     </header>
 
-    <!-- FORM INPUT MANUAL USER -->
-    <section class="bg-gray-800 p-6 rounded-xl border border-gray-700">
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-bold text-white flex items-center gap-2">
-          👤 Tambah User Baru (Input Manual)
-        </h3>
-        <button onclick="cleanDummies()" class="bg-gray-700 hover:bg-red-800 text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs transition">
-          🗑️ Bersihkan Dummy
-        </button>
+    <!-- FORM INPUT DUMMY USER & GENERATOR RANDOM -->
+    <section class="bg-gray-800 p-6 rounded-xl border border-gray-700 space-y-4">
+      <div class="flex flex-wrap justify-between items-center gap-3">
+        <div>
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            👤 Tambah User / Dummy Baru
+          </h3>
+          <p class="text-xs text-gray-400">Buat user secara manual atau gunakan tombol random generator otomatis di samping.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="generateRandomDummies()" class="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs transition shadow flex items-center gap-1.5">
+            ⚡ +5 Dummy Random Otomatis
+          </button>
+          <button onclick="cleanDummies()" class="bg-gray-700 hover:bg-red-800 text-gray-300 hover:text-white px-3 py-2 rounded-lg text-xs transition">
+            🗑️ Bersihkan Dummy
+          </button>
+        </div>
       </div>
 
-      <form id="dummyForm" onsubmit="submitDummyUser(event)" class="space-y-4">
+      <form id="dummyForm" onsubmit="submitDummyUser(event)" class="space-y-4 pt-2 border-t border-gray-700">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label class="block text-xs text-gray-400 mb-1">Nama Tampilan *</label>
@@ -147,13 +154,31 @@
           <textarea id="d_photos" rows="3" required placeholder="https://images.unsplash.com/photo-1494790108377-be9c29b29330&#10;https://images.unsplash.com/photo-1524504388940-b1c1722653e1&#10;https://images.unsplash.com/photo-1517841905240-472988babdf9" class="w-full p-2.5 bg-gray-700 rounded-lg border border-gray-600 text-white text-xs font-mono focus:border-blue-500 focus:outline-none"></textarea>
         </div>
 
-        <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-lg text-sm font-bold shadow-lg transition">
-          💾 Simpan User Baru
-        </button>
+        <div class="flex gap-2">
+          <button type="submit" class="flex-1 bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-lg text-sm font-bold shadow-lg transition">
+            💾 Simpan User Baru
+          </button>
+          <button type="button" onclick="randomizeFormInputs()" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-4 py-2.5 rounded-lg text-xs font-bold transition">
+            🎲 Acak Preferensi & Tujuan
+          </button>
+        </div>
       </form>
     </section>
 
-    <!-- TABEL USERS DENGAN TOMBOL VIP -->
+    <!-- MONITORING LAPORAN PENGGUNA (REPORTS) -->
+    <section class="bg-gray-800 p-5 rounded-xl border border-gray-700 space-y-4">
+      <div class="flex justify-between items-center">
+        <div>
+          <h3 class="text-lg font-bold text-red-400 flex items-center gap-2">🚨 Monitoring Laporan Pengguna (Reports)</h3>
+          <p class="text-xs text-gray-400">Daftar laporan pelanggaran yang dikirimkan oleh pengguna bot.</p>
+        </div>
+      </div>
+      <div id="reportsTable" class="overflow-x-auto text-sm">
+        <p class="text-gray-400">Memuat laporan...</p>
+      </div>
+    </section>
+
+    <!-- TABEL USERS -->
     <section class="bg-gray-800 p-5 rounded-xl border border-gray-700">
       <h3 class="text-lg font-bold mb-4 text-gray-200">👥 Daftar Pengguna & Hak Akses VIP</h3>
       <div id="userTable" class="overflow-x-auto text-sm">
@@ -161,7 +186,7 @@
       </div>
     </section>
 
-    <!-- MONITORING PERCAKAPAN DIKELOMPOKKAN PER PASANGAN -->
+    <!-- MONITORING PERCAKAPAN PER PASANGAN -->
     <section class="bg-gray-800 p-5 rounded-xl border border-gray-700 space-y-4">
       <div class="flex flex-wrap justify-between items-center gap-3">
         <div>
@@ -170,14 +195,12 @@
         </div>
         
         <div class="flex flex-wrap items-center gap-2">
-          <!-- Filter Jenis Pesan -->
           <div class="flex gap-1 text-xs bg-gray-900 p-1 rounded-lg border border-gray-700">
             <button onclick="setMainFilter('all')" id="mainFilter_all" class="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-bold transition">🔘 Semua Pesan</button>
             <button onclick="setMainFilter('media')" id="mainFilter_media" class="px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:text-white transition">📷 Foto & Video Saja</button>
             <button onclick="setMainFilter('text')" id="mainFilter_text" class="px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:text-white transition">💬 Teks Saja</button>
           </div>
 
-          <!-- Tombol Hapus Semua Room Chat Sekaligus -->
           <button onclick="clearAllRooms()" class="bg-red-950 hover:bg-red-800 border border-red-700 text-red-300 text-xs px-3 py-2 rounded-lg transition font-bold shadow flex items-center gap-1">
             🗑️ Bersihkan SEMUA Riwayat Chat
           </button>
@@ -223,6 +246,27 @@
       }
     }
 
+    // Fungsi Pengacak Input Form Setelah Submit
+    function randomizeFormInputs() {
+      const prefCheckboxes = document.querySelectorAll('input[name="pref_gender"]');
+      const goalCheckboxes = document.querySelectorAll('input[name="goals"]');
+      
+      prefCheckboxes.forEach(cb => {
+        if (cb.value !== 'Semua') {
+          cb.checked = Math.random() > 0.4;
+        } else {
+          cb.checked = false;
+        }
+      });
+      // Pastikan minimal 1 tercentang
+      if (!Array.from(prefCheckboxes).some(cb => cb.checked)) prefCheckboxes[0].checked = true;
+
+      goalCheckboxes.forEach(cb => {
+        cb.checked = Math.random() > 0.3;
+      });
+      if (!Array.from(goalCheckboxes).some(cb => cb.checked)) goalCheckboxes[0].checked = true;
+    }
+
     async function submitDummyUser(e) {
       e.preventDefault();
       const token = localStorage.getItem('token');
@@ -257,12 +301,29 @@
         if (data.success) {
           alert(data.message);
           document.getElementById('dummyForm').reset();
+          randomizeFormInputs(); // Acak preferensi & goals untuk input selanjutnya
           showDash();
         } else {
           alert('Error: ' + data.error);
         }
       } catch (err) {
         alert('Gagal mengirim data.');
+      }
+    }
+
+    // 1-Klik Generate 5 Dummy Random
+    async function generateRandomDummies() {
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch('/admin/generate-random-dummies', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        alert(data.message || data.error);
+        showDash();
+      } catch (err) {
+        alert('Gagal membuat dummy acak.');
       }
     }
 
@@ -281,6 +342,39 @@
         }
       } catch (err) {
         alert('Gagal mengubah status VIP');
+      }
+    }
+
+    // RESOLVE LAPORAN
+    async function resolveReport(reportId) {
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch(`/admin/reports/${reportId}/resolve`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        alert(data.message || data.error);
+        showDash();
+      } catch (err) {
+        alert('Gagal menyelesaikan laporan.');
+      }
+    }
+
+    // HAPUS LAPORAN
+    async function deleteReport(reportId) {
+      if (!confirm('Hapus tiket laporan ini?')) return;
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch(`/admin/reports/${reportId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        alert(data.message || data.error);
+        showDash();
+      } catch (err) {
+        alert('Gagal menghapus laporan.');
       }
     }
 
@@ -333,7 +427,6 @@
 
         return `
           <div class="bg-gray-900 border border-gray-700 rounded-xl overflow-hidden shadow">
-            <!-- Header Room -->
             <div class="bg-gray-800/90 px-4 py-3 border-b border-gray-700 flex flex-wrap justify-between items-center gap-2">
               <div class="flex items-center gap-2">
                 <span class="text-sm font-bold text-white">${r.user1_name}</span>
@@ -353,7 +446,6 @@
               </div>
             </div>
 
-            <!-- Preview Singkat Pesan -->
             <div class="px-4 py-2.5 bg-gray-950/40 text-xs text-gray-400 flex justify-between items-center">
               <span><b>Pesan Terakhir:</b> ${lastMsg ? (lastMsg.message_text || `[${(lastMsg.message_type || 'media').toUpperCase()}]`) : 'Belum ada obrolan'}</span>
               <span class="font-mono text-[11px]">${r.last_message_at ? new Date(r.last_message_at).toLocaleTimeString('id-ID') : '-'}</span>
@@ -417,7 +509,6 @@
       activeModalRoom = null;
     }
 
-    // HAPUS SATU ROOM MATCH (LANGSUNG HILANG DARI DASHBOARD)
     async function clearRoom(connectionId) {
       if (!confirm('Hapus seluruh riwayat chat dan hapus room match ini dari dashboard?')) return;
       const token = localStorage.getItem('token');
@@ -429,7 +520,6 @@
         const data = await res.json();
         alert(data.message || data.error);
         closeExpandModal();
-        // Hapus langsung dari array lokal dan render ulang tampilan
         globalRooms = globalRooms.filter(r => r.connection_id !== connectionId);
         renderRooms();
       } catch (err) {
@@ -437,7 +527,6 @@
       }
     }
 
-    // BERSIHKAN SEMUA ROOM CHAT SEKALIGUS
     async function clearAllRooms() {
       if (!confirm('Yakin ingin membersihkan SEMUA riwayat percakapan dan semua room match dari dashboard?')) return;
       const token = localStorage.getItem('token');
@@ -532,6 +621,7 @@
       
       const authHeader = { 'Authorization': 'Bearer ' + token };
 
+      // 1. Muat Data Pengguna
       try {
         const resUsers = await fetch('/admin/users', { headers: authHeader });
         globalUsers = await resUsers.json();
@@ -596,6 +686,59 @@
         document.getElementById('userTable').innerHTML = '<p class="text-red-400">Gagal memuat data pengguna.</p>';
       }
 
+      // 2. Muat Data Laporan (Reports)
+      try {
+        const resReports = await fetch('/admin/reports', { headers: authHeader });
+        const reports = await resReports.json();
+
+        if (Array.isArray(reports) && reports.length > 0) {
+          document.getElementById('reportsTable').innerHTML = `
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-gray-700 text-gray-400 text-xs">
+                  <th class="pb-2">Pelapor</th>
+                  <th class="pb-2">Pengguna Dilaporkan</th>
+                  <th class="pb-2">Alasan</th>
+                  <th class="pb-2">Status</th>
+                  <th class="pb-2">Waktu</th>
+                  <th class="pb-2 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-700">
+                ${reports.map(rep => `
+                  <tr>
+                    <td class="py-2.5">
+                      <div class="font-semibold text-white">${rep.reporter_name || 'Anonim'}</div>
+                      <div class="text-[11px] text-gray-400 font-mono">@${rep.reporter_username || 'no_user'}</div>
+                    </td>
+                    <td class="py-2.5">
+                      <div class="font-semibold text-red-400">${rep.reported_name}</div>
+                      <div class="text-[11px] text-gray-400 font-mono">@${rep.reported_username || 'no_user'} [ID: ${rep.reported_tg}]</div>
+                    </td>
+                    <td class="py-2.5 text-xs text-gray-200">${rep.reason}</td>
+                    <td class="py-2.5">
+                      <span class="text-[10px] px-2 py-0.5 rounded font-bold ${rep.status === 'RESOLVED' ? 'bg-green-950 text-green-300 border border-green-700' : 'bg-yellow-950 text-yellow-300 border border-yellow-700'}">
+                        ${rep.status}
+                      </span>
+                    </td>
+                    <td class="py-2.5 text-xs text-gray-400 font-mono">${new Date(rep.created_at).toLocaleString('id-ID')}</td>
+                    <td class="py-2.5 text-right space-x-1">
+                      ${rep.status !== 'RESOLVED' ? `<button onclick="resolveReport('${rep.id}')" class="bg-green-900/80 hover:bg-green-800 text-green-300 text-xs px-2 py-1 rounded">✅ Selesai</button>` : ''}
+                      <button onclick="deleteUser('${rep.reported_user_id}', '${rep.reported_name}')" class="bg-red-950 hover:bg-red-800 text-red-300 text-xs px-2 py-1 rounded">🚫 Blokir User</button>
+                      <button onclick="deleteReport('${rep.id}')" class="bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs px-2 py-1 rounded">🗑️</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>`;
+        } else {
+          document.getElementById('reportsTable').innerHTML = '<p class="text-gray-400 py-3 text-center">Belum ada laporan masuk dari pengguna.</p>';
+        }
+      } catch (err) {
+        document.getElementById('reportsTable').innerHTML = '<p class="text-red-400">Gagal memuat daftar laporan.</p>';
+      }
+
+      // 3. Muat Percakapan
       try {
         const resRooms = await fetch('/admin/grouped-conversations', { headers: authHeader });
         globalRooms = await resRooms.json();
