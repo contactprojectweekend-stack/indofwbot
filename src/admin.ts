@@ -8,6 +8,7 @@ import path from 'path';
 const router = Router();
 const JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'secret';
 
+// Inisialisasi Database & Kolom Pendukung
 export async function seedAdmin() {
   try {
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_vip BOOLEAN DEFAULT FALSE');
@@ -148,13 +149,11 @@ router.get('/grouped-conversations', requireAdmin, async (req: any, res) => {
   }
 });
 
-// 5. HAPUS & BERSIHKAN SATU ROOM MATCH PERCAKAPAN (HILANG DARI DASHBOARD)
+// 5. HAPUS SATU ROOM MATCH PERCAKAPAN
 router.delete('/conversations/room/:connectionId', requireAdmin, async (req: any, res) => {
   try {
     const { connectionId } = req.params;
-    // Hapus seluruh pesan di room ini
     await pool.query('DELETE FROM messages WHERE connection_id = $1', [connectionId]);
-    // Hapus koneksi match agar hilang sepenuhnya dari riwayat dashboard
     await pool.query('DELETE FROM connections WHERE id = $1', [connectionId]);
 
     await recordAudit(req.admin.id, 'DELETE_ROOM_CONVERSATION', 'ROOMS', connectionId, req.ip || '', {});
@@ -164,7 +163,7 @@ router.delete('/conversations/room/:connectionId', requireAdmin, async (req: any
   }
 });
 
-// 6. BERSIHKAN SEMUA RIWAYAT PERCAKAPAN SEKALIGUS
+// 6. BERSIHKAN SEMUA RIWAYAT PERCAKAPAN
 router.delete('/conversations/clear-all', requireAdmin, async (req: any, res) => {
   try {
     await pool.query('DELETE FROM messages');
@@ -280,12 +279,7 @@ router.post('/clean-dummy-users', requireAdmin, async (req: any, res) => {
   }
 });
 
-router.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'admin.html'));
-});
-
-export default router;
-
+// 12. RENDER HALAMAN ADMIN DASHBOARD
 router.get('/', (req, res) => {
   const htmlPath = path.resolve(process.cwd(), 'src', 'views', 'admin.html');
   res.sendFile(htmlPath);
