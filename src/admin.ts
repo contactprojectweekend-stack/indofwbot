@@ -1,3 +1,4 @@
+cat << 'EOF' > src/admin.ts
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
@@ -8,7 +9,6 @@ import path from 'path';
 const router = Router();
 const JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'secret';
 
-// Inisialisasi Database & Kolom Pendukung
 export async function seedAdmin() {
   try {
     await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_vip BOOLEAN DEFAULT FALSE');
@@ -149,7 +149,7 @@ router.get('/grouped-conversations', requireAdmin, async (req: any, res) => {
   }
 });
 
-// 5. HAPUS SATU ROOM MATCH PERCAKAPAN
+// 5. HAPUS & BERSIHKAN SATU ROOM MATCH PERCAKAPAN
 router.delete('/conversations/room/:connectionId', requireAdmin, async (req: any, res) => {
   try {
     const { connectionId } = req.params;
@@ -163,7 +163,7 @@ router.delete('/conversations/room/:connectionId', requireAdmin, async (req: any
   }
 });
 
-// 6. BERSIHKAN SEMUA RIWAYAT PERCAKAPAN
+// 6. BERSIHKAN SEMUA RIWAYAT PERCAKAPAN SEKALIGUS
 router.delete('/conversations/clear-all', requireAdmin, async (req: any, res) => {
   try {
     await pool.query('DELETE FROM messages');
@@ -286,3 +286,4 @@ router.get('/', (req, res) => {
 });
 
 export default router;
+EOF
