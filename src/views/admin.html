@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-6">
+  <div id="loginBox" class="max-w-md mx-auto mt-20 bg-gray-800 p-6 rounded-lg border border-gray-700">
+    <h2 class="text-xl font-bold mb-4">Admin Authentication</h2>
+    <input id="email" type="email" placeholder="Email" value="contact.projectweekend@gmail.com" class="w-full mb-3 p-2 bg-gray-700 rounded border border-gray-600">
+    <input id="password" type="password" placeholder="Password" value="Indonesia" class="w-full mb-3 p-2 bg-gray-700 rounded border border-gray-600">
+    <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded font-semibold">Masuk</button>
+  </div>
+
+  <div id="dashboard" class="hidden max-w-6xl mx-auto space-y-6">
+    <header class="flex justify-between items-center bg-gray-800 p-4 rounded-lg border border-gray-700">
+      <h1 class="text-2xl font-bold">Admin Control Center</h1>
+      <button onclick="logout()" class="bg-red-600 px-4 py-2 rounded">Logout</button>
+    </header>
+
+    <section class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+      <h3 class="text-lg font-bold mb-3">Daftar Pengguna</h3>
+      <div id="userTable" class="overflow-x-auto text-sm"></div>
+    </section>
+
+    <section class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+      <h3 class="text-lg font-bold mb-3">Monitoring Percakapan</h3>
+      <div id="msgTable" class="overflow-x-auto text-sm"></div>
+    </section>
+  </div>
+
+  <script>
+    let token = localStorage.getItem('token');
+    if (token) showDash();
+
+    async function login() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const res = await fetch('/admin/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        showDash();
+      } else alert(data.error);
+    }
+
+    async function showDash() {
+      document.getElementById('loginBox').classList.add('hidden');
+      document.getElementById('dashboard').classList.remove('hidden');
+      
+      const resUsers = await fetch('/admin/users', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } });
+      const users = await resUsers.json();
+      document.getElementById('userTable').innerHTML = `
+        <table class="w-full text-left">
+          <tr class="border-b border-gray-700"><th>Nama</th><th>Usia</th><th>Gender</th><th>Tujuan</th><th>Foto</th><th>Super Likes</th></tr>
+          ${users.map(u => `<tr class="border-b border-gray-800"><td>${u.display_name}</td><td>${u.age}</td><td>${u.gender}</td><td>${u.relationship_goals.join(', ')}</td><td>${u.photo_count}</td><td>${u.superlikes_count}</td></tr>`).join('')}
+        </table>`;
+
+      const resMsgs = await fetch('/admin/conversations', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } });
+      const msgs = await resMsgs.json();
+      document.getElementById('msgTable').innerHTML = `
+        <table class="w-full text-left">
+          <tr class="border-b border-gray-700"><th>Pengirim</th><th>Penerima</th><th>Pesan</th><th>Waktu</th></tr>
+          ${msgs.map(m => `<tr class="border-b border-gray-800"><td>${m.sender_name}</td><td>${m.receiver_name}</td><td>${m.message_text}</td><td>${new Date(m.created_at).toLocaleString()}</td></tr>`).join('')}
+        </table>`;
+    }
+
+    function logout() { localStorage.removeItem('token'); location.reload(); }
+  </script>
+</body>
+</html>
