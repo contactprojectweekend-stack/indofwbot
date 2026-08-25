@@ -285,3 +285,10 @@ router.get('/', (req, res) => {
 });
 
 export default router;
+
+router.get('/', (req, res) => {
+  const htmlPath = path.resolve(process.cwd(), 'src', 'views', 'admin.html');
+  res.sendFile(htmlPath);
+});
+
+export default router;
